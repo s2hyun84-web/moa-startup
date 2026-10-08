@@ -1,0 +1,17 @@
+# Personal records and secrets must never be committed.
+.env
+.env.*
+!.env.example
+*backup*.json
+*백업*.json
+backups/
+private/
+personal/
+*.local.*
+.DS_Store
+__pycache__/
+*.pyc
+node_modules/
+dist/
+playwright-report/
+test-results/
