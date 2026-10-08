@@ -1,0 +1,61 @@
+name: Collect public notices and deploy Pages
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 22 * * *' # 07:17 Asia/Seoul (next day); GitHub may delay execution.
+  workflow_dispatch:
+    inputs:
+      collect:
+        description: 'Collect official notices (requires BIZINFO_API_KEY); false deploys bundled empty feed'
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: moa-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test local storage and data normalization
+        run: npm test
+      - name: Collect public data only
+        env:
+          BIZINFO_API_KEY: ${{ secrets.BIZINFO_API_KEY }}
+          EVENT_NAME: ${{ github.event_name }}
+          COLLECT_INPUT: ${{ inputs.collect }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$COLLECT_INPUT" = "false" ]; then
+            echo 'Deploying bundled feed without collection (explicit manual choice).'
+          elif [ "$EVENT_NAME" = "push" ] && [ -z "$BIZINFO_API_KEY" ]; then
+            echo '::warning::No API key. Deploying app with no official announcements.'
+          else
+            python3 scripts/collect.py
+          fi
+      - name: Stage allowlisted public assets
+        run: python3 scripts/stage.py
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment
